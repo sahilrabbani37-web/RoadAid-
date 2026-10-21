@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14213d">
+<title>RoadAid</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Figtree:wght@400;600;700&display=swap">
+<style>
+:root{--bg:#eef1f5;--card:#fff;--ink:#14213d;--mute:#5b6577;--line:#d5dbe5;--sign:#0b5fff;--on:#fff;--amber:#ffb703;--ok:#1b8a3a;--err:#c62828;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1624;--card:#18223a;--ink:#eef2fb;--mute:#9aa6bd;--line:#2c3a58;--sign:#4d8dff;--on:#0f1624;--ok:#5ad27a;--err:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:30px;line-height:1.1;margin:6px 0}
+h2{font-size:17px;margin:0 0 10px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:24px;margin-bottom:12px}
+.stripe{height:8px;border-radius:4px;background:repeating-linear-gradient(90deg,var(--amber) 0 28px,transparent 28px 44px);margin-bottom:14px}
+.sub{color:var(--mute);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opts{display:flex;gap:8px;flex-wrap:wrap}
+input[type=radio]{position:absolute;opacity:0}
+label.t{display:block;border:2px solid var(--line);border-radius:12px;padding:9px 14px;text-align:center;font-weight:600;cursor:pointer}
+label.big{padding:18px 8px;font-size:18px;font-weight:700}
+input:checked+label.t{border-color:var(--sign);background:var(--sign);color:var(--on)}
+input:focus-visible+label.t,button:focus-visible,input[type=text]:focus-visible,input[type=tel]:focus-visible,input[type=password]:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+.f{display:block;margin-bottom:12px;font-weight:600}
+input[type=text],input[type=tel],input[type=password]{width:100%;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+button,a.b{display:block;width:100%;border:0;border-radius:12px;padding:14px;font:700 16px system-ui,sans-serif;cursor:pointer;text-align:center;text-decoration:none;margin-top:10px}
+.go{background:var(--amber);color:#14213d}
+.alt{background:transparent;color:var(--sign);border:2px solid var(--sign)}
+#err,.msg{color:var(--err);min-height:1.3em;font-weight:600;margin:0 0 8px}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.steps li{display:grid;grid-template-columns:34px 1fr;gap:12px;opacity:.45}
+.steps li.on{opacity:1}
+.steps b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--line);font-size:15px}
+.steps li.on b{background:var(--sign);color:var(--on)}
+.steps li.on.cur b{background:var(--amber);color:#14213d}
+.steps span{display:block;color:var(--mute);font-size:14px}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--line);font-size:13px;font-weight:700}
+.hide{display:none}
+h1,h2,.brand,button,a.b{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+var DB  = "https://roadaid-549ca-default-rtdb.asia-southeast1.firebasedatabase.app";
+var PIN = "1234";
+var WA  = "918955633535";
+
+var app = document.getElementById("app");
+var timer = null;
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function api(path,method,body){
+  return fetch(DB+path+".json",{method:method||"GET",body:body?JSON.stringify(body):undefined}).then(function(r){
+    if(!r.ok) throw new Error("Server error "+r.status); return r.json()});
+}
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+function sel(n){return document.querySelector('input[name="'+n+'"]:checked').value}
+function brand(){return '<div class="brand"><svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="16" fill="#ffb703"/><circle cx="18" cy="18" r="9" fill="#14213d"/><circle cx="18" cy="18" r="3.5" fill="#ffb703"/></svg>RoadAid</div><div class="stripe"></div>'}
+function stop(){if(timer){clearInterval(timer);timer=null}}
+
+function customer(){
+  stop();
+  var rid = ls("rid");
+  if(rid){ track(rid); return; }
+  app.innerHTML = brand()+
+  '<h1>Stuck on the road?</h1><p class="sub">Puncture or out of petrol in Jaipur? Tell us where you are.</p>'+
+  '<div class="card"><h2>What do you need?</h2><div class="tiles">'+
+  '<div><input type="radio" name="svc" id="s1" value="Puncture repair" checked><label class="t big" for="s1">Puncture repair</label></div>'+
+  '<div><input type="radio" name="svc" id="s2" value="Petrol delivery"><label class="t big" for="s2">Petrol delivery</label></div></div></div>'+
+  '<div class="card"><h2>Your vehicle</h2><div class="opts">'+
+  '<span><input type="radio" name="veh" id="v1" value="Bike" checked><label class="t" for="v1">Bike</label></span>'+
+  '<span><input type="radio" name="veh" id="v2" value="Scooter"><label class="t" for="v2">Scooter</label></span>'+
+  '<span><input type="radio" name="veh" id="v3" value="Car"><label class="t" for="v3">Car</label></span></div>'+
+  '<div id="pt" class="hide" style="margin-top:14px"><h2>How much petrol?</h2><div class="opts">'+
+  '<span><input type="radio" name="ltr" id="l1" value="2 litres" checked><label class="t" for="l1">2 L</label></span>'+
+  '<span><input type="radio" name="ltr" id="l2" value="3 litres"><label class="t" for="l2">3 L</label></span>'+
+  '<span><input type="radio" name="ltr" id="l3" value="5 litres"><label class="t" for="l3">5 L</label></span></div></div></div>'+
+  '<div class="card"><h2>Where are you?</h2><button type="button" class="alt" id="gps" style="margin:0 0 12px">Use my current location</button>'+
+  '<label class="f">Location or landmark<input type="text" id="loc" placeholder="e.g. Near Albert Hall, MI Road"></label>'+
+  '<label class="f">Your name<input type="text" id="name" autocomplete="name"></label>'+
+  '<label class="f">Phone number<input type="tel" id="phone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number"></label></div>'+
+  '<p id="err" role="alert"></p><button class="go" id="send">Request help</button>';
+  var coords="";
+  function sync(){document.getElementById("pt").className = sel("svc")==="Petrol delivery"?"":"hide"}
+  document.querySelectorAll('input[name="svc"]').forEach(function(r){r.addEventListener("change",sync)});
+  var err=document.getElementById("err");
+  document.getElementById("gps").onclick=function(){
+    var b=this; err.textContent="";
+    if(!navigator.geolocation){err.textContent="Location isn\u2019t available. Type your landmark.";return}
+    b.textContent="Finding you\u2026";
+    navigator.geolocation.getCurrentPosition(function(p){coords=p.coords.latitude+","+p.coords.longitude;b.textContent="Location added \u2713"},
+    function(){b.textContent="Use my current location";err.textContent="Couldn\u2019t get location. Type your landmark."},{enableHighAccuracy:true,timeout:10000});
+  };
+  document.getElementById("send").onclick=function(){
+    var name=document.getElementById("name").value.trim(),phone=document.getElementById("phone").value.trim(),loc=document.getElementById("loc").value.trim();
+    if(!name){err.textContent="Enter your name.";return}
+    if(!/^[6-9]\d{9}$/.test(phone)){err.textContent="Enter a valid 10-digit mobile number.";return}
+    if(!loc&&!coords){err.textContent="Add your location or a landmark.";return}
+    var svc=sel("svc"), btn=this; btn.disabled=true; btn.textContent="Sending\u2026";
+    api("/requests","POST",{svc:svc,veh:sel("veh"),ltr:svc==="Petrol delivery"?sel("ltr"):"",name:name,phone:phone,loc:loc,coords:coords,status:"new",t:Date.now()})
+    .then(function(r){ls("rid",r.name);track(r.name)})
+    .catch(function(){btn.disabled=false;btn.textContent="Request help";err.textContent="Couldn\u2019t send. Check your internet and try again."});
+  };
+}
+
+var STEPS=["Request received","Mechanic assigned","Mechanic arrived","Job done"];
+var IDX={"new":0,accepted:1,arrived:2,done:3};
+function track(id){
+  function draw(r){
+    var i=IDX[r.status]||0, lis="";
+    var sub=["We are finding a mechanic near you.","","Your mechanic is at your location.","Thank you for using RoadAid."];
+    if(r.mech) sub[1]=esc(r.mech)+" is on the way."; else sub[1]="A mechanic will accept soon.";
+    for(var k=0;k<4;k++) lis+='<li class="'+(k<=i?"on":"")+(k===i?" cur":"")+'"><b>'+(k<i?"\u2713":k+1)+'</b><div>'+STEPS[k]+'<span>'+sub[k]+'</span></div></li>';
+    app.innerHTML=brand()+'<h1>'+(i===3?"All done":"Help is coming")+'</h1><p class="sub">'+esc(r.svc)+' \u00b7 '+esc(r.veh)+(r.ltr?' \u00b7 '+esc(r.ltr):'')+'</p>'+
+    '<div class="card"><ol class="steps">'+lis+'</ol></div>'+
+    (r.mechPhone&&i<3?'<a class="b go" href="tel:+91'+esc(r.mechPhone)+'">Call mechanic</a>':'')+
+    (i<3?'<a class="b alt" href="tel:+'+WA+'">Call RoadAid</a>':'')+
+    '<button class="alt" id="nw">'+(i===3?"New request":"Cancel and start over")+'</button>';
+    document.getElementById("nw").onclick=function(){stop();try{localStorage.removeItem("rid")}catch(e){}customer()};
+    if(i===3) stop();
+  }
+  function poll(){api("/requests/"+id).then(function(r){if(!r){try{localStorage.removeItem("rid")}catch(e){}stop();customer();return}draw(r)}).catch(function(){})}
+  poll(); stop(); timer=setInterval(poll,5000);
+}
+
+function mechanic(){
+  stop();
+  if(ls("mpin")!==PIN){
+    app.innerHTML=brand()+'<h1>Mechanic login</h1><div class="card"><label class="f">PIN<input type="password" id="pin" inputmode="numeric"></label><p class="msg" id="m"></p><button class="go" id="ok">Log in</button></div>';
+    document.getElementById("ok").onclick=function(){if(document.getElementById("pin").value===PIN){ls("mpin",PIN);mechanic()}else document.getElementById("m").textContent="Wrong PIN."};
+    return;
+  }
+  if(!ls("mname")||!ls("mphone")){
+    app.innerHTML=brand()+'<h1>Your details</h1><div class="card"><label class="f">Name<input type="text" id="mn"></label><label class="f">Phone<input type="tel" id="mp" inputmode="numeric" maxlength="10"></label><p class="msg" id="m"></p><button class="go" id="ok">Save</button></div>';
+    document.getElementById("ok").onclick=function(){var n=document.getElementById("mn").value.trim(),p=document.getElementById("mp").value.trim();
+      if(!n||!/^[6-9]\d{9}$/.test(p)){document.getElementById("m").textContent="Enter your name and a valid 10-digit phone.";return}
+      ls("mname",n);ls("mphone",p);mechanic()};
+    return;
+  }
+  var me=ls("mname");
+  function load(){
+    api("/requests").then(function(all){
+      var list=[]; for(var k in (all||{})){var r=all[k];r.id=k;if(r.status==="new"||(r.mech===me&&r.status!=="done"))list.push(r)}
+      list.sort(function(a,b){return b.t-a.t});
+      var h=brand()+'<h1>Jobs</h1><p class="sub">Logged in as '+esc(me)+'. Updates every 5 seconds.</p>';
+      if(!list.length) h+='<div class="card">No open requests right now.</div>';
+      list.forEach(function(r){
+        var mine=r.mech===me, btn=r.status==="new"?'<button class="go" data-a="accepted" data-id="'+r.id+'">Accept job</button>':
+          r.status==="accepted"?'<button class="go" data-a="arrived" data-id="'+r.id+'">I have arrived</button>':'<button class="go" data-a="done" data-id="'+r.id+'">Mark job done</button>';
+        h+='<div class="card"><span class="pill">'+esc(r.status)+'</span><h2 style="margin-top:8px">'+esc(r.svc)+' \u00b7 '+esc(r.veh)+(r.ltr?' \u00b7 '+esc(r.ltr):'')+'</h2>'+
+        '<div>'+esc(r.name)+(r.loc?' \u2014 '+esc(r.loc):'')+'</div>'+
+        (r.coords?'<a class="b alt" target="_blank" rel="noopener" href="https://maps.google.com/?q='+esc(r.coords)+'">Open map</a>':'')+
+        (mine?'<a class="b alt" href="tel:+91'+esc(r.phone)+'">Call customer</a>':'')+btn+'</div>';
+      });
+      h+='<button class="alt" id="lo">Log out</button>';
+      app.innerHTML=h;
+      document.querySelectorAll("button[data-a]").forEach(function(b){b.onclick=function(){
+        var a=b.getAttribute("data-a"),id=b.getAttribute("data-id");b.disabled=true;
+        var patch={status:a}; if(a==="accepted"){patch.mech=me;patch.mechPhone=ls("mphone")}
+        api("/requests/"+id,"PATCH",patch).then(load).catch(function(){b.disabled=false})}});
+      document.getElementById("lo").onclick=function(){stop();try{localStorage.clear()}catch(e){}mechanic()};
+    }).catch(function(){});
+  }
+  load(); timer=setInterval(load,5000);
+}
+
+function route(){ if(location.hash==="#mechanic") mechanic(); else customer(); }
+window.addEventListener("hashchange",route);
+route();
+</script>
+</body>
+</html>
